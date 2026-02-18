@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### SHRAPNEL Data Exclusions ###
+shrapnel_data/
+restored_files/
+*.dat
+*.shard.*
