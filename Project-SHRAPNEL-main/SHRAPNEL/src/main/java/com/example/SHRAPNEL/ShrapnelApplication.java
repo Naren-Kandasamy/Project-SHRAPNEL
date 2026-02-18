@@ -1,0 +1,13 @@
+package com.example.SHRAPNEL;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class ShrapnelApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(ShrapnelApplication.class, args);
+	}
+
+}

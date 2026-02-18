@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: SHRAPNEL-CORE
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/shrapnel_db
+    username: postgres
+    password: Jan10@2013
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    show-sql: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        envers:
+          audit_table_suffix: _AUDIT_LOG
+          revision_field_name: rev_id
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+  threads:
+    virtual:
+      enabled: true
+
+# Root Level: Configuration for the Shatter Engine
+shrapnel:
+  engine:
+    storage-path: ./shrapnel_data
+    shard-size-mb: 1
+  blockchain:
+    provider-url: https://sepolia.infura.io/v3/your-api-key
