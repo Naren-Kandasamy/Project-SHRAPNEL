@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.envers.Audited;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +22,10 @@ public class FileMetaData {
 
     private String fileName;
     private long totalSize;
+    @Column(name = "expiration_time")
+    private LocalDateTime expirationTime;
+    @Column(name = "is_nuked")
+    private boolean isNuked = false;
 
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @JoinColumn(name = "file_id")
