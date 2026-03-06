@@ -34,7 +34,7 @@ public class NukeService {
         }
 
         // Mark as nuked after all shards are processed
-        fileMetaData.setIsNuked(true);
+        fileMetaData.setNuked(true);
         log.info("File nuked: {}", fileMetaData.getFileName());
     }
 
