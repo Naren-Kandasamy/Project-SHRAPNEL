@@ -34,8 +34,9 @@ public class NukeScheduler {
                 try {
                     nukeService.nukeFile(file);
                     fileMetaDataRepository.save(file); // Update isNuked flag
+                    log.info("Successfully nuked expired file: {} (ID: {})", file.getFileName(), file.getId());
                 } catch (Exception e) {
-                    log.error("Error nuking file: {}", file.getFileName(), e);
+                    log.error("Error nuking file: {} (ID: {})", file.getFileName(), file.getId(), e);
                 }
             }
         } else {
