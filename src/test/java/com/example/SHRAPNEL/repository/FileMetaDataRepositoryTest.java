@@ -47,4 +47,17 @@ class FileMetaDataRepositoryTest {
         assertThat(expiredFiles).hasSize(1);
         assertThat(expiredFiles.get(0).getFileName()).isEqualTo("expired.txt");
     }
+
+    @Test
+    void testBlockchainFieldsPersisted() {
+        FileMetaData md = new FileMetaData("block.txt", 123L);
+        md.setFileSha256("deadbeef");
+        md.setBlockchainTxHash("0xtxhash");
+        entityManager.persist(md);
+        entityManager.flush();
+
+        FileMetaData fetched = repository.findById(md.getId()).orElseThrow();
+        assertThat(fetched.getFileSha256()).isEqualTo("deadbeef");
+        assertThat(fetched.getBlockchainTxHash()).isEqualTo("0xtxhash");
+    }
 }
