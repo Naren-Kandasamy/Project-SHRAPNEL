@@ -16,6 +16,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.UUID;
 
+import com.example.SHRAPNEL.dto.FileResponseDTO;
+import java.util.List;
+import java.util.stream.Collectors;
+
 @RestController
 @RequestMapping("/api/SHRAPNEL")
 @RequiredArgsConstructor
@@ -44,5 +48,19 @@ public class ReassemblyController {
                 .contentType(MediaType.parseMediaType("application/octet-stream"))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + metadata.getFileName() + "\"")
                 .body(resource);
+    }
+
+    @GetMapping("/files")
+    public ResponseEntity<List<FileResponseDTO>> getActiveFiles() {
+        List<FileResponseDTO> files = repository.findByIsNukedFalse().stream()
+            .map(metadata -> FileResponseDTO.builder()
+                .id(metadata.getId())
+                .fileName(metadata.getFileName())
+                .totalSize(metadata.getTotalSize())
+                .expirationTime(metadata.getExpirationTime())
+                .tags(metadata.getTags())
+                .build())
+            .collect(Collectors.toList());
+        return ResponseEntity.ok(files);
     }
 }

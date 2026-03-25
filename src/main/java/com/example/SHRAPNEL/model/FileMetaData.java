@@ -26,6 +26,11 @@ public class FileMetaData {
     private LocalDateTime expirationTime;
     @Column(name = "is_nuked")
     private boolean isNuked = false;
+    
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "file_tags", joinColumns = @JoinColumn(name = "file_id"))
+    @Column(name = "tag")
+    private List<String> tags;
 
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @JoinColumn(name = "file_id")

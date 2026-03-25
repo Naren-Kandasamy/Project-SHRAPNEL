@@ -13,4 +13,5 @@ public interface FileMetaDataRepository extends JpaRepository<FileMetaData, UUID
 
     @Query("SELECT f FROM FileMetaData f WHERE f.expirationTime <= :now AND f.isNuked = false")
     List<FileMetaData> findExpiredFiles(@Param("now") LocalDateTime now);
+    List<FileMetaData> findByIsNukedFalse();
 }
