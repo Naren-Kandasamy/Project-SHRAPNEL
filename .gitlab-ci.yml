@@ -1,0 +1,28 @@
+image: eclipse-temurin:21-jdk
+
+stages:
+  - build
+  - test
+  - deploy
+
+cache:
+  paths:
+    - .m2/repository
+
+build_job:
+  stage: build
+  script:
+    - chmod +x mvnw
+    - ./mvnw clean compile -DskipTests
+
+test_job:
+  stage: test
+  script:
+    - chmod +x mvnw
+    - ./mvnw test -DskipTests
+
+deploy_job:
+  stage: deploy
+  script:
+    - echo "Simulating SHRAPNEL Virtual File System Deployment..."
+    - mkdir -p ./shrapnel_data
