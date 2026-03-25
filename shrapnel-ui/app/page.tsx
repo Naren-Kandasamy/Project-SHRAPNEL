@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Download, HardDrive, Upload, X, Search, CheckCircle2, Copy } from "lucide-react"
+import { Download, HardDrive, Upload, X, Search, CheckCircle2, Clock } from "lucide-react"
 
 export default function Dashboard() {
   const [files, setFiles] = useState<any[]>([])
 
   // Shatter Form States
   const [file, setFile] = useState<File | null>(null)
+  const [enableNuke, setEnableNuke] = useState(false) // NEW STATE FOR TOGGLE
   const [expiration, setExpiration] = useState(60)
   const [tags, setTags] = useState<string[]>([])
   const [currentTag, setCurrentTag] = useState("")
@@ -60,7 +61,12 @@ export default function Dashboard() {
 
     const formData = new FormData()
     formData.append("file", file)
-    formData.append("expirationMinutes", expiration.toString())
+    
+    // ONLY APPEND EXPIRATION IF ENABLED
+    if (enableNuke) {
+      formData.append("expirationMinutes", expiration.toString())
+    }
+    
     tags.forEach(tag => formData.append("tags", tag))
 
     try {
@@ -72,14 +78,11 @@ export default function Dashboard() {
         }
       })
       
-      // Capture the returned ID to show the user
       setShatteredResult({ id: response.data.id, fileName: response.data.fileName })
-      loadFiles() // Refresh table
+      loadFiles() 
       
-      // Reset form fields
-      setFile(null); setTags([]); setProgress(0); setExpiration(60)
+      setFile(null); setTags([]); setProgress(0); setExpiration(60); setEnableNuke(false);
       
-      // Note: You must reset the file input element manually in React
       const fileInput = document.getElementById('file-upload') as HTMLInputElement
       if (fileInput) fileInput.value = ''
 
@@ -94,7 +97,7 @@ export default function Dashboard() {
   const handleManualRestore = () => {
     if (restoreId.trim() === "") return
     downloadFile(restoreId.trim())
-    setRestoreId("") // Clear input after triggering download
+    setRestoreId("") 
   }
 
   return (
@@ -143,9 +146,42 @@ export default function Dashboard() {
                 <Input id="file-upload" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} disabled={isUploading} />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Expiration (Minutes)</label>
-                <Input type="number" value={expiration} onChange={(e) => setExpiration(Number(e.target.value))} disabled={isUploading} />
+			  {/* NUKE TIMER TOGGLE */}
+              <div className="flex flex-col p-4 border rounded-md bg-muted/30 transition-all duration-300">
+                <div className="flex items-center space-x-2">
+                  <input 
+                    type="checkbox" 
+                    id="enableNuke" 
+                    checked={enableNuke} 
+                    onChange={(e) => setEnableNuke(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                    disabled={isUploading}
+                  />
+                  <label htmlFor="enableNuke" className="text-sm font-medium cursor-pointer flex items-center gap-2 select-none">
+                    <Clock className="w-4 h-4" /> Enable Nuke Timer (Auto-delete)
+                  </label>
+                </div>
+
+                {/* Smooth Expansion Wrapper */}
+                <div 
+                  className={`grid transition-all duration-300 ease-in-out ${
+                    enableNuke ? "grid-rows-[1fr] opacity-100 mt-4" : "grid-rows-[0fr] opacity-0"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="space-y-2 pl-6 border-l-2 border-primary/30 ml-2 pb-1">
+                      <label className="text-sm font-medium text-muted-foreground">Expiration (Minutes)</label>
+                      <Input 
+                        type="number" 
+                        min="1" 
+                        value={expiration} 
+                        onChange={(e) => setExpiration(Number(e.target.value))} 
+                        disabled={isUploading}
+                        className="bg-background max-w-[200px]" // Keeps the input field looking neat
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -243,7 +279,12 @@ export default function Dashboard() {
                           </div>
                         </TableCell>
                         <TableCell>{file.totalSize}</TableCell>
-                        <TableCell>{new Date(file.expirationTime).toLocaleString()}</TableCell>
+                        <TableCell>
+                          {/* DYNAMIC EXPIRATION DISPLAY */}
+                          {file.expirationTime ? new Date(file.expirationTime).toLocaleString() : (
+                            <Badge variant="outline" className="text-muted-foreground">Never</Badge>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                     {files.length === 0 && (
