@@ -3,8 +3,8 @@ package com.example.SHRAPNEL.repository;
 import com.example.SHRAPNEL.model.FileMetaData;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,15 +26,15 @@ class FileMetaDataRepositoryTest {
         // Create test data
         FileMetaData expiredFile = new FileMetaData("expired.txt", 100L);
         expiredFile.setExpirationTime(LocalDateTime.now().minusMinutes(1));
-        expiredFile.setIsNuked(false);
+        expiredFile.setNuked(false);
 
         FileMetaData activeFile = new FileMetaData("active.txt", 100L);
         activeFile.setExpirationTime(LocalDateTime.now().plusMinutes(10));
-        activeFile.setIsNuked(false);
+        activeFile.setNuked(false);
 
         FileMetaData nukedFile = new FileMetaData("nuked.txt", 100L);
         nukedFile.setExpirationTime(LocalDateTime.now().minusMinutes(1));
-        nukedFile.setIsNuked(true);
+        nukedFile.setNuked(true);
 
         entityManager.persist(expiredFile);
         entityManager.persist(activeFile);
