@@ -60,6 +60,6 @@ class ShatterControllerTest {
                 .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.MULTIPART_FORM_DATA))
                 .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("shattered")));
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("\"fileName\":\"test.txt\"")));
     }
 }
