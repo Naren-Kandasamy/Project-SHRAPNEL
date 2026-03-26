@@ -35,7 +35,11 @@ class ShatterControllerTest {
     @MockitoBean
     private FileMetaDataRepository repository;
 
+    @MockitoBean
+    private com.example.SHRAPNEL.service.BlockchainFingerprintService fingerprintService;
+
     @Test
+    @org.springframework.security.test.context.support.WithMockUser
     void testUploadAndShatter() throws Exception {
         // Create a mock file
         MockMultipartFile file = new MockMultipartFile("file", "test.txt", "text/plain", "Hello World".getBytes());
@@ -53,6 +57,7 @@ class ShatterControllerTest {
         mockMvc.perform(multipart("/api/SHRAPNEL/shatter")
                 .file(file)
                 .param("expirationMinutes", "60")
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.MULTIPART_FORM_DATA))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("shattered")));

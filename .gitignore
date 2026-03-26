@@ -37,3 +37,8 @@ shrapnel_data/
 restored_files/
 *.dat
 *.shard.*
+
+### Secrets and Telemetry ###
+.env
+mlruns/
+mlflow.db

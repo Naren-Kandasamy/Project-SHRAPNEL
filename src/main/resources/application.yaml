@@ -41,4 +41,11 @@ shrapnel:
     storage-path: ./shrapnel_data
     shard-size-mb: 1
   blockchain:
-    provider-url: https://sepolia.infura.io/v3/your-api-key
+    provider-url: https://polygon-amoy.g.alchemy.com/v2/i66R6pp3uYEGBClog1chm
+    private-key: ${BLOCKCHAIN_PRIVATE_KEY:}
+    default-gas-price: 50000000000    # fallback in wei
+    default-gas-limit: 50000
+
+mlflow:
+  tracking-uri: ${MLFLOW_TRACKING_URI:http://localhost:5000}
+  experiment-name: shrapnel-blockchain

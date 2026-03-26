@@ -28,6 +28,7 @@ public class ShatterController {
 
     private final ShatteringEngine engine;
     private final FileMetaDataRepository repository;
+    private final com.example.SHRAPNEL.service.BlockchainFingerprintService fingerprintService;
 
     @PostMapping(value = "/shatter", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Shatter a file", description = "Uploads a file and fragments it using Stochastic Panama logic with expiration time.")
@@ -50,6 +51,9 @@ public class ShatterController {
 
         // 2. Trigger the engine using the 'execute' router
         FileMetaData metadata = engine.execute(tempPath);
+
+        // fingerprint the encrypted copy and push to chain; field is persisted later
+        fingerprintService.recordFingerprint(metadata, tempPath);
 
         // CHANGE 2: Only calculate and set expiration if the user provided a value
         if (expirationMinutes != null && expirationMinutes > 0) {

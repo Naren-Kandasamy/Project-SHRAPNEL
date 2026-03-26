@@ -33,7 +33,10 @@ public class NukeService {
             }
         }
 
-        // Mark as nuked after all shards are processed
+        // Mark as nuked after all shards are processed.  We deliberately
+        // do **not** touch the blockchain-related fields (sha + txHash) here –
+        // they serve as the immutable record of what once existed.  Envers will
+        // capture any changes to the entity in the audit tables.
         fileMetaData.setNuked(true);
         log.info("File nuked: {}", fileMetaData.getFileName());
     }

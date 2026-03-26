@@ -36,6 +36,14 @@ public class FileMetaData {
     @JoinColumn(name = "file_id")
     private List<FileShard> shards;
 
+    // SHA‑256 fingerprint computed immediately after encryption
+    @Column(name = "file_sha256")
+    private String fileSha256;
+
+    // transaction hash returned by Polygon commit
+    @Column(name = "blockchain_tx_hash")
+    private String blockchainTxHash;
+
     // Custom constructor for your ShatteringEngine
     public FileMetaData(String fileName, long totalSize) {
         this.fileName = fileName;
