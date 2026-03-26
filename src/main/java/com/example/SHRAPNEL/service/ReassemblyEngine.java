@@ -5,94 +5,86 @@ import com.example.SHRAPNEL.model.FileShard;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.nio.channels.FileChannel;
+import javax.crypto.Cipher;
+import javax.crypto.CipherInputStream;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import java.util.List;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 
 @Service
 @Slf4j
 public class ReassemblyEngine {
 
-    private final long TWO_GB_LIMIT = 2L * 1024 * 1024 * 1024;
+    private final SecretKey secretKey;
+
+    /**
+     * CONCURRENCY GOVERNOR:
+     * Limits active decryptions to 4. This prevents 19+ shards from
+     * overwhelming the JVM Heap with JCA internal buffers.
+     */
+    private static final Semaphore reassemblyThrottle = new Semaphore(4);
+
+    public ReassemblyEngine() {
+        String encodedKey = System.getenv("SHRAPNEL_AES_KEY");
+        if (encodedKey == null || encodedKey.length() != 32) {
+            throw new IllegalStateException("SHRAPNEL_AES_KEY must be a 32-character environment variable.");
+        }
+        this.secretKey = new SecretKeySpec(encodedKey.getBytes(StandardCharsets.UTF_8), "AES");
+    }
 
     public Path execute(FileMetaData metadata, Path targetPath) throws IOException {
-        Files.deleteIfExists(targetPath); // Ensure a clean start
+        Files.deleteIfExists(targetPath);
+        log.info("🚀 Starting Stable Streaming Reassembly for {}", metadata.getFileName());
 
-        if (metadata.getTotalSize() < TWO_GB_LIMIT) {
-            log.info("🚀 Parallel JVT Reassembly for {}", metadata.getFileName());
-            return reassembleStandard(metadata, targetPath);
-        } else {
-            log.info("🚀 Massive Panama + JVT Reassembly for {}", metadata.getFileName());
-            return reassembleMassive(metadata, targetPath);
-        }
-    }
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor();
+             RandomAccessFile targetFile = new RandomAccessFile(targetPath.toFile(), "rw")) {
 
-    /**
-     * Parallel Reassembly using Virtual Threads.
-     * We don't need to sort! We use FileChannel's position-based writes.
-     */
-    private Path reassembleStandard(FileMetaData metadata, Path targetPath) throws IOException {
-        try (FileChannel targetChannel = FileChannel.open(targetPath,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ);
-             var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            targetFile.setLength(metadata.getTotalSize());
 
             for (FileShard shard : metadata.getShards()) {
                 executor.submit(() -> {
                     try {
-                        Path shardPath = Paths.get(shard.getStoragePath());
-                        try (FileChannel shardChannel = FileChannel.open(shardPath, StandardOpenOption.READ)) {
-                            // Transfer directly to the specific offset in the target file
-                            shardChannel.transferTo(0, shardChannel.size(), targetChannel.position(shard.getOffset()));
+                        // The Gatekeeper: Threads beyond 4 will wait here
+                        reassemblyThrottle.acquire();
+                        try (InputStream fis = new BufferedInputStream(new FileInputStream(shard.getStoragePath()))) {
+
+                            Cipher cipher = initCipher(shard.getNonce());
+                            try (CipherInputStream cis = new CipherInputStream(fis, cipher)) {
+
+                                byte[] buffer = new byte[65536]; // 64KB static buffer
+                                int read;
+                                long currentOffset = shard.getOffset();
+
+                                try (RandomAccessFile threadSafeAccess = new RandomAccessFile(targetPath.toFile(), "rw")) {
+                                    threadSafeAccess.seek(currentOffset);
+
+                                    while ((read = cis.read(buffer)) != -1) {
+                                        threadSafeAccess.write(buffer, 0, read);
+                                    }
+                                }
+                            }
+                            log.info("🔓 Decrypted shard {} successfully", shard.getSequenceOrder());
+                        } finally {
+                            reassemblyThrottle.release(); // Allow the next thread in
                         }
-                        log.info("🧩 Restored shard {} at offset {}", shard.getSequenceOrder(), shard.getOffset());
-                    } catch (IOException e) {
-                        log.error("❌ Failed to restore shard {}: {}", shard.getSequenceOrder(), e.getMessage());
-                    }
-                });
-            }
-            // Executor closes here, acting as a barrier until all shards are "punched" in.
-        }
-        return targetPath;
-    }
-
-    /**
-     * Massive Reassembly using Panama Memory Mapping + Virtual Threads
-     */
-    private Path reassembleMassive(FileMetaData metadata, Path targetPath) throws IOException {
-        long totalSize = metadata.getTotalSize();
-
-        try (Arena arena = Arena.ofShared();
-             FileChannel targetChannel = FileChannel.open(targetPath,
-                     StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ);
-             var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-
-            // Pre-allocate the entire file memory space
-            MemorySegment targetSegment = targetChannel.map(
-                    FileChannel.MapMode.READ_WRITE, 0, totalSize, arena);
-
-            for (FileShard shard : metadata.getShards()) {
-                executor.submit(() -> {
-                    try {
-                        Path shardPath = Paths.get(shard.getStoragePath());
-                        try (FileChannel shardChannel = FileChannel.open(shardPath, StandardOpenOption.READ)) {
-                            // Map this specific shard into memory
-                            MemorySegment shardSegment = shardChannel.map(
-                                    FileChannel.MapMode.READ_ONLY, 0, shardChannel.size(), arena);
-
-                            // Thread-safe copy into the specific region of the target file
-                            MemorySegment.copy(shardSegment, 0, targetSegment, shard.getOffset(), shardSegment.byteSize());
-                        }
-                        log.info("📦 Panama-mapped shard {} into master file", shard.getSequenceOrder());
-                    } catch (IOException e) {
-                        log.error("❌ Panama restore failed for shard {}: {}", shard.getSequenceOrder(), e.getMessage());
+                    } catch (Throwable t) {
+                        log.error("🛑 FATAL Shard {}: {}", shard.getSequenceOrder(), t.getMessage());
                     }
                 });
             }
         }
         return targetPath;
+    }
+
+    private Cipher initCipher(byte[] nonce) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        GCMParameterSpec spec = new GCMParameterSpec(128, nonce);
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, spec);
+        return cipher;
     }
 }
