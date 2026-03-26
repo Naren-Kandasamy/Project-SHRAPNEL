@@ -48,6 +48,7 @@ public class BlockchainFingerprintService {
     private final BigInteger defaultGasLimit;
 
     // --- production constructor ------------------------------------------------
+    @org.springframework.beans.factory.annotation.Autowired
     public BlockchainFingerprintService(Environment env,
                                         FileMetaDataRepository repository) {
         this.repository = repository;
@@ -57,14 +58,19 @@ public class BlockchainFingerprintService {
         this.defaultGasLimit = new BigInteger(env.getProperty("shrapnel.blockchain.default-gas-limit","21000"));
 
         this.web3j = Web3j.build(new HttpService(provider));
-        this.credentials = Credentials.create(privateKey);
+        if (privateKey != null && !privateKey.isBlank()) {
+            this.credentials = Credentials.create(privateKey);
+        } else {
+            log.warn("No blockchain private key configured. Blockchain tracking will be disabled.");
+            this.credentials = null;
+        }
 
         String trackingUri = env.getProperty("mlflow.tracking-uri");
         String experimentName = env.getProperty("mlflow.experiment-name","default");
         this.mlflow = new MlflowClient(trackingUri);
         this.mlflowExperimentId = mlflow.getExperimentByName(experimentName)
-                .orElseGet(() -> mlflow.createExperiment(experimentName))
-                .getExperimentId();
+                .map(org.mlflow.api.proto.Service.Experiment::getExperimentId)
+                .orElseGet(() -> mlflow.createExperiment(experimentName));
     }
 
     // --- additional constructor used for unit tests ---------------------------
@@ -118,6 +124,10 @@ public class BlockchainFingerprintService {
      */
     public void recordFingerprint(FileMetaData metadata, Path encryptedFile) {
         try {
+            if (this.credentials == null) {
+                log.warn("Skipping blockchain fingerprinting (missing private key)");
+                return;
+            }
             String sha = computeSha256(encryptedFile);
             metadata.setFileSha256(sha);
 
@@ -161,18 +171,22 @@ public class BlockchainFingerprintService {
     TransactionReceipt commitHashToPolygon(String sha256,
                                            BigInteger gasPrice,
                                            BigInteger gasLimit) throws Exception {
-        TransactionManager txManager = new RawTransactionManager(web3j, credentials);
+        long chainId = web3j.ethChainId().send().getChainId().longValue();
+        TransactionManager txManager = new RawTransactionManager(web3j, credentials, chainId);
         BigInteger nonce = web3j.ethGetTransactionCount(
                 credentials.getAddress(), DefaultBlockParameterName.PENDING)
                 .send().getTransactionCount();
 
         // the "to" address is simply our own address; data contains the hash
         String data = "0x" + sha256;
-        String txHash = txManager.sendTransaction(gasPrice, gasLimit, credentials.getAddress(), data, BigInteger.ZERO)
-                .getTransactionHash();
+        org.web3j.protocol.core.methods.response.EthSendTransaction response = txManager.sendTransaction(gasPrice, gasLimit, credentials.getAddress(), data, BigInteger.ZERO);
+        if (response.hasError()) {
+            throw new RuntimeException("Node rejected tx: " + response.getError().getMessage());
+        }
+        String txHash = response.getTransactionHash();
 
         PollingTransactionReceiptProcessor processor =
-                new PollingTransactionReceiptProcessor(web3j, 1000, 15);
+                new PollingTransactionReceiptProcessor(web3j, 1000, 60);
 
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             CompletableFuture<TransactionReceipt> future = CompletableFuture.supplyAsync(() -> {

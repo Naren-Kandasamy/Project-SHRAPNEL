@@ -6,8 +6,8 @@ import com.example.SHRAPNEL.service.ShatteringEngine;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
@@ -29,13 +29,17 @@ class ShatterControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private ShatteringEngine engine;
 
-    @MockBean
+    @MockitoBean
     private FileMetaDataRepository repository;
 
+    @MockitoBean
+    private com.example.SHRAPNEL.service.BlockchainFingerprintService fingerprintService;
+
     @Test
+    @org.springframework.security.test.context.support.WithMockUser
     void testUploadAndShatter() throws Exception {
         // Create a mock file
         MockMultipartFile file = new MockMultipartFile("file", "test.txt", "text/plain", "Hello World".getBytes());
@@ -53,6 +57,7 @@ class ShatterControllerTest {
         mockMvc.perform(multipart("/api/SHRAPNEL/shatter")
                 .file(file)
                 .param("expirationMinutes", "60")
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.MULTIPART_FORM_DATA))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("shattered")));

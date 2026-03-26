@@ -61,9 +61,16 @@ class BlockchainFingerprintServiceTest {
         Path temp = Files.createTempFile("test2", ".txt");
         Files.writeString(temp, "payload");
 
+        // stub mlflow so it doesn't return null and cause NPE
+        org.mlflow.api.proto.Service.RunInfo mockRunInfo = org.mlflow.api.proto.Service.RunInfo.newBuilder().setRunUuid("mock-run-id").build();
+        when(mlflow.createRun(anyString())).thenReturn(mockRunInfo);
+
         // spy service so that the blockchain call returns a fixed receipt
         BlockchainFingerprintService spy = spy(service);
-        doReturn(new org.web3j.protocol.core.methods.response.TransactionReceipt())
+        org.web3j.protocol.core.methods.response.TransactionReceipt mockReceipt = new org.web3j.protocol.core.methods.response.TransactionReceipt();
+        mockReceipt.setTransactionHash("dummy-hash");
+        mockReceipt.setStatus("0x1");
+        doReturn(mockReceipt)
                 .when(spy)
                 .commitHashToPolygon(anyString(), any(), any());
 
