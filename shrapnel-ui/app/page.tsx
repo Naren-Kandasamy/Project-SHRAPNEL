@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
-import { fetchFiles, downloadFile, apiClient } from "@/lib/api"
+import { fetchFiles, apiClient } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -16,22 +16,26 @@ export default function Dashboard() {
   // Shatter Form States
   const [file, setFile] = useState<File | null>(null)
   const [enableNuke, setEnableNuke] = useState(false) // NEW STATE FOR TOGGLE
-  const [expiration, setExpiration] = useState(60)
+  const [expiration, setExpiration] = useState<number | string>(60)
   const [tags, setTags] = useState<string[]>([])
   const [currentTag, setCurrentTag] = useState("")
   const [progress, setProgress] = useState(0)
   const [isUploading, setIsUploading] = useState(false)
   const [shatteredResult, setShatteredResult] = useState<{id: string, fileName: string} | null>(null)
+  const [password, setPassword] = useState("")
 
   // Restore Form States
   const [restoreId, setRestoreId] = useState("")
+  const [restorePassword, setRestorePassword] = useState("")
+  const [isRestoring, setIsRestoring] = useState(false)
+  const [restoreProgress, setRestoreProgress] = useState(0)
 
   const loadFiles = async () => {
     try {
       const data = await fetchFiles()
       setFiles(data)
     } catch (error) {
-      console.error("Failed to load files", error)
+      // Backend might be restarting; silently ignore to avoid dev popups
     }
   }
 
@@ -59,19 +63,19 @@ export default function Dashboard() {
     setIsUploading(true)
     setShatteredResult(null)
 
-    const formData = new FormData()
-    formData.append("file", file)
-    
-    // ONLY APPEND EXPIRATION IF ENABLED
+    const query = new URLSearchParams()
+    query.append("fileName", file.name)
     if (enableNuke) {
-      formData.append("expirationMinutes", expiration.toString())
+      query.append("expirationMinutes", expiration.toString())
     }
-    
-    tags.forEach(tag => formData.append("tags", tag))
+    if (password.trim() !== '') {
+      query.append("password", password.trim())
+    }
+    tags.forEach(tag => query.append("tags", tag))
 
     try {
-      const response = await apiClient.post("/shatter", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+      const response = await apiClient.post(`/shatter?${query.toString()}`, file, {
+        headers: { "Content-Type": "application/octet-stream" },
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1))
           setProgress(percentCompleted)
@@ -81,32 +85,78 @@ export default function Dashboard() {
       setShatteredResult({ id: response.data.id, fileName: response.data.fileName })
       loadFiles() 
       
-      setFile(null); setTags([]); setProgress(0); setExpiration(60); setEnableNuke(false);
+      setFile(null); setTags([]); setProgress(0); setExpiration(60); setEnableNuke(false); setPassword("");
       
       const fileInput = document.getElementById('file-upload') as HTMLInputElement
       if (fileInput) fileInput.value = ''
 
     } catch (error) {
-      console.error("Upload failed", error)
+      // Silently ignore to avoid dev popup
     } finally {
       setIsUploading(false)
     }
   }
 
   // Restore Logic
-  const handleManualRestore = () => {
+  const handleManualRestore = async () => {
     if (restoreId.trim() === "") return
-    downloadFile(restoreId.trim())
-    setRestoreId("") 
+    setIsRestoring(true)
+    setRestoreProgress(0)
+
+    try {
+        const { startRestore, fetchRestoreStatus } = await import('@/lib/api')
+        
+        // 1. Send the Async Trigger safely to Spring Boot Native execution
+        await startRestore(restoreId.trim(), restorePassword.trim())
+
+        // 2. Poll the integer accurately avoiding DOM memory crashes 
+        const pollInterval = window.setInterval(async () => {
+            try {
+                const status = await fetchRestoreStatus(restoreId.trim())
+                if (status >= 0) {
+                    setRestoreProgress(status)
+                }
+                
+                if (status === 100) {
+                    window.clearInterval(pollInterval)
+                    setTimeout(() => {
+                        setIsRestoring(false)
+                        setRestoreProgress(0)
+                        setRestoreId("") 
+                        setRestorePassword("")
+                    }, 3000) 
+                } else if (status === -1) {
+                    window.clearInterval(pollInterval)
+                    throw new Error("Backend restoration exception flagged")
+                }
+            } catch (pollErr) {
+                window.clearInterval(pollInterval)
+                setIsRestoring(false)
+            }
+        }, 500)
+
+    } catch (error) {
+        setIsRestoring(false)
+        setRestoreProgress(0)
+    }
   }
 
   return (
     <main className="p-10 max-w-5xl mx-auto space-y-8">
-      <div className="flex items-center gap-3 mb-8">
-        <HardDrive className="w-10 h-10 text-primary" />
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Project SHRAPNEL</h1>
-          <p className="text-muted-foreground">Secure Ephemeral File Management System</p>
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <HardDrive className="w-10 h-10 text-primary" />
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Project SHRAPNEL</h1>
+            <p className="text-muted-foreground">Secure Ephemeral File Management System</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <a href="http://localhost:5000" target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" className="border-primary text-primary hover:bg-primary/10">
+              📊 MLflow Analytics
+            </Button>
+          </a>
         </div>
       </div>
 
@@ -146,6 +196,17 @@ export default function Dashboard() {
                 <Input id="file-upload" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} disabled={isUploading} />
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Encryption Password (Optional)</label>
+                <Input 
+                  type="password"
+                  placeholder="Leave blank to drop back to system-wide SHRAPNEL key" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isUploading}
+                />
+              </div>
+
 			  {/* NUKE TIMER TOGGLE */}
               <div className="flex flex-col p-4 border rounded-md bg-muted/30 transition-all duration-300">
                 <div className="flex items-center space-x-2">
@@ -175,7 +236,7 @@ export default function Dashboard() {
                         type="number" 
                         min="1" 
                         value={expiration} 
-                        onChange={(e) => setExpiration(Number(e.target.value))} 
+                        onChange={(e) => setExpiration(e.target.value ? Number(e.target.value) : "")} 
                         disabled={isUploading}
                         className="bg-background max-w-[200px]" // Keeps the input field looking neat
                       />
@@ -205,16 +266,24 @@ export default function Dashboard() {
 
               {isUploading && (
                 <div className="space-y-2">
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Uploading & Shattering...</span>
-                    <span>{progress}%</span>
+                  <div className="flex justify-between text-xs text-muted-foreground pb-1">
+                    <span className={progress === 100 ? "text-amber-600 font-semibold animate-pulse" : ""}>
+                      {progress < 100 
+                        ? "Uploading Payload to Server..." 
+                        : "Upload complete! Compiling data cryptographically into shards... DO NOT close this window!"}
+                    </span>
+                    <span className={progress === 100 ? "text-amber-600 font-bold" : ""}>{progress}%</span>
                   </div>
                   <Progress value={progress} />
                 </div>
               )}
             </CardContent>
             <CardFooter>
-              <Button className="w-full" onClick={handleUpload} disabled={!file || isUploading}>
+              <Button 
+                className="w-full bg-gradient-to-r from-orange-500 via-red-500 to-purple-600 hover:from-orange-600 hover:via-red-600 hover:to-purple-700 text-white border-0 shadow-lg shadow-orange-500/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]" 
+                onClick={handleUpload} 
+                disabled={!file || isUploading}
+              >
                 {isUploading ? "Processing..." : "Execute Shatter Engine"}
               </Button>
             </CardFooter>
@@ -237,11 +306,40 @@ export default function Dashboard() {
                   onChange={(e) => setRestoreId(e.target.value)}
                 />
               </div>
+
+              <div className="space-y-2 mt-4">
+                <label className="text-sm font-medium">Decryption Password (Optional)</label>
+                <Input 
+                  type="password"
+                  placeholder="Enter password if encrypted uniquely" 
+                  value={restorePassword}
+                  onChange={(e) => setRestorePassword(e.target.value)}
+                  disabled={isRestoring}
+                  onKeyDown={(e) => e.key === 'Enter' && handleManualRestore()}
+                />
+              </div>
+
+              {isRestoring && (
+                <div className="space-y-2 mt-6">
+                  <div className="flex justify-between text-xs text-muted-foreground pb-1">
+                    <span className={restoreProgress === 100 ? "text-green-600 font-semibold" : ""}>
+                      {restoreProgress < 100 
+                        ? "Downloading and Reassembling File Stream..." 
+                        : "Reassembly complete!"}
+                    </span>
+                    <span className={restoreProgress === 100 ? "text-green-600 font-bold" : ""}>{restoreProgress}%</span>
+                  </div>
+                  <Progress value={restoreProgress} />
+                </div>
+              )}
             </CardContent>
             <CardFooter>
-              <Button className="w-full" variant="default" onClick={handleManualRestore} disabled={!restoreId.trim()}>
-                <Download className="w-4 h-4 mr-2" />
-                Execute Reassembly Engine
+              <Button 
+                className="w-full bg-gradient-to-r from-purple-600 via-sky-500 to-sky-400 hover:from-purple-700 hover:via-sky-600 hover:to-sky-500 text-white border-0 shadow-lg shadow-sky-500/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]" 
+                onClick={handleManualRestore} 
+                disabled={!restoreId.trim() || isRestoring}
+              >
+                {isRestoring ? "Reassembling..." : <><Download className="w-4 h-4 mr-2" /> Execute Reassembly Engine</>}
               </Button>
             </CardFooter>
           </Card>

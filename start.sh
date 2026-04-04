@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Securely load environment keys
+if [ -f .env ]; then
+    echo "🔐 Loading .env configuration..."
+    source .env
+fi
+
 echo "🚀 Starting Project SHRAPNEL Build & Run Sequence..."
 
 # Cleanup function to kill background processes when Ctrl+C is pressed
@@ -24,6 +30,12 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# 1.5 Start MLflow Tracking Server
+echo "📊 Starting MLflow Tracking Server..."
+# Run in background and pipe output to dev/null to keep console clean, or leave it. Keep it simple.
+mlflow server --backend-store-uri sqlite:///mlflow.db --host 127.0.0.1 --port 5000 > /dev/null 2>&1 &
+sleep 2
+
 # 2. Start the Backend in the background
 echo "⚙️  Starting Spring Boot Server..."
 # We can skip 'clean' here since we just did it above
@@ -42,6 +54,7 @@ echo "====================================================="
 echo "✅ SHRAPNEL is launching!"
 echo "🌐 Dashboard: http://localhost:3000"
 echo "🔌 API:       http://localhost:8080"
+echo "📈 MLflow:    http://localhost:5000"
 echo "🛑 Press [CTRL+C] to stop both servers safely."
 echo "====================================================="
 echo ""

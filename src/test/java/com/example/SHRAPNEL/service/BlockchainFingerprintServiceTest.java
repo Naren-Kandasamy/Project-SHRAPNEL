@@ -72,7 +72,7 @@ class BlockchainFingerprintServiceTest {
         mockReceipt.setStatus("0x1");
         doReturn(mockReceipt)
                 .when(spy)
-                .commitHashToPolygon(anyString(), any(), any());
+                .commitHashToPolygonAsync(anyString(), any(), any(), org.mockito.ArgumentMatchers.nullable(String.class), org.mockito.ArgumentMatchers.anyLong());
 
         spy.recordFingerprint(meta, temp);
 
@@ -85,7 +85,7 @@ class BlockchainFingerprintServiceTest {
         assertThat(saved.getBlockchainTxHash()).isNotNull();
 
         // ensure we did attempt to push the computed hash onto chain
-        verify(spy).commitHashToPolygon(eq(saved.getFileSha256()), any(), any());
+        verify(spy).commitHashToPolygonAsync(eq(saved.getFileSha256()), any(), any(), org.mockito.ArgumentMatchers.nullable(String.class), org.mockito.ArgumentMatchers.anyLong());
 
         // mlflow should have been invoked with the basic parameters/metrics
         verify(mlflow).logParam(anyString(), eq("file_size"), anyString());

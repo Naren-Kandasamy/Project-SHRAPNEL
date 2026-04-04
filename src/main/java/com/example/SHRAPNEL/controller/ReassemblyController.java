@@ -28,26 +28,31 @@ public class ReassemblyController {
     private final FileMetaDataRepository repository;
     private final ReassemblyEngine reassemblyEngine;
 
-    @GetMapping("/download/{fileId}")
-    public ResponseEntity<Resource> downloadFile(@PathVariable UUID fileId) throws Exception {
-        // 1. Fetch metadata
-        FileMetaData metadata = repository.findById(fileId)
-                .orElseThrow(() -> new RuntimeException("File not found"));
+    @PostMapping("/restore/start/{fileId}")
+    public ResponseEntity<String> startRestore(@PathVariable UUID fileId, @RequestParam(value = "password", required = false) String password) {
+        ReassemblyEngine.PROGRESS_MAP.put(fileId.toString(), 0);
+        
+        Thread.startVirtualThread(() -> {
+            try {
+                // Fetch metadata
+                FileMetaData metadata = repository.findById(fileId).orElseThrow(() -> new RuntimeException("File not found"));
+                // Define restoration path securely inside Backend Storage permanently avoiding Frontend Blob downloads!
+                Path restoredDir = Paths.get("./restored_files");
+                Files.createDirectories(restoredDir);
+                Path targetFile = restoredDir.resolve("RESTORED_" + metadata.getFileName());
+                
+                reassemblyEngine.execute(metadata, targetFile, password);
+            } catch (Exception e) {
+                ReassemblyEngine.PROGRESS_MAP.put(fileId.toString(), -1);
+            }
+        });
+        
+        return ResponseEntity.ok("Restoration Backgrounded");
+    }
 
-        // 2. Define restoration path
-        Path restoredDir = Paths.get("./restored_files");
-        Files.createDirectories(restoredDir);
-        Path targetFile = restoredDir.resolve("RESTORED_" + metadata.getFileName());
-
-        // 3. Trigger the reassembly router (supports both standard and Panama logic)
-        reassemblyEngine.execute(metadata, targetFile);
-
-        // 4. Stream back to user
-        Resource resource = new UrlResource(targetFile.toUri());
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/octet-stream"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + metadata.getFileName() + "\"")
-                .body(resource);
+    @GetMapping("/restore/status/{fileId}")
+    public ResponseEntity<Integer> getStatus(@PathVariable UUID fileId) {
+        return ResponseEntity.ok(ReassemblyEngine.PROGRESS_MAP.getOrDefault(fileId.toString(), 0));
     }
 
     @GetMapping("/files")

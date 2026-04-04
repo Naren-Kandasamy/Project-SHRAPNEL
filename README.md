@@ -1,7 +1,7 @@
 # Project SHRAPNEL
 
 ## Overview
-Project SHRAPNEL is a secure ephemeral file storage system built with Spring Boot 4.0.2 and Java 25. It uses JPA/Hibernate Envers for metadata auditing and a custom ShatteringEngine for file fragmentation. The system includes a background service that monitors file expiration and securely "nukes" expired data.
+Project SHRAPNEL is a secure ephemeral file storage system built with Spring Boot 4.0.2 and Java 21. It uses JPA/Hibernate Envers for metadata auditing and a custom ShatteringEngine for file fragmentation. The system includes a background service that monitors file expiration and securely "nukes" expired data.
 
 ### System flow (high level)
 1. **Upload** – a user POSTs a file to `/api/SHRAPNEL/shatter` along with an expiration period.
@@ -21,7 +21,7 @@ Project SHRAPNEL is a secure ephemeral file storage system built with Spring Boo
 - Virtual threads for high-performance I/O operations
 
 ## Requirements
-- Java 25
+- Java 21
 - Spring Boot 4.0.2
 - PostgreSQL database
 - Maven for build management
@@ -49,7 +49,7 @@ shrapnel:
 ```
 
 ## Building the Project
-1. Ensure you have Java 25 and Maven installed.
+1. Ensure you have Java 21 and Maven installed.
 2. Clone the repository.
 3. Navigate to the project directory.
 4. Run the following command to build:

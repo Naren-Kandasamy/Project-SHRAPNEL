@@ -3,14 +3,8 @@ import axios from 'axios';
 // Connects to your Spring Boot default port
 const API_BASE_URL = 'http://localhost:8080/api/SHRAPNEL';
 
-// Use your default credentials from application.yaml
-const authHeader = 'Basic ' + btoa('naren:123');
-
 export const apiClient = axios.create({
-    baseURL: API_BASE_URL,
-    headers: {
-        'Authorization': authHeader
-    }
+    baseURL: API_BASE_URL
 });
 
 export const fetchFiles = async () => {
@@ -18,7 +12,15 @@ export const fetchFiles = async () => {
     return response.data;
 };
 
-export const downloadFile = (fileId: string) => {
-    // For downloads, we can just redirect the browser with auth included in URL or use fetch
-    window.location.href = `http://naren:123@localhost:8080/api/SHRAPNEL/download/${fileId}`;
+export const startRestore = async (fileId: string, password?: string) => {
+    let url = `/restore/start/${fileId}`;
+    if (password) {
+        url += `?password=${encodeURIComponent(password)}`;
+    }
+    await apiClient.post(url);
+};
+
+export const fetchRestoreStatus = async (fileId: string) => {
+    const response = await apiClient.get(`/restore/status/${fileId}`);
+    return response.data; // integer
 };

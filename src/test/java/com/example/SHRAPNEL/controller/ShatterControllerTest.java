@@ -41,24 +41,22 @@ class ShatterControllerTest {
     @Test
     @org.springframework.security.test.context.support.WithMockUser
     void testUploadAndShatter() throws Exception {
-        // Create a mock file
-        MockMultipartFile file = new MockMultipartFile("file", "test.txt", "text/plain", "Hello World".getBytes());
-
-        // Mock the engine response
+        // Mock the engine response natively for testing byte maps
         FileMetaData mockMetadata = new FileMetaData("test.txt", 11L);
         mockMetadata.setId(java.util.UUID.randomUUID());
         mockMetadata.setExpirationTime(LocalDateTime.now().plusMinutes(60));
-        mockMetadata.setShards(Arrays.asList()); // Empty list for simplicity
+        mockMetadata.setShards(Arrays.asList()); 
 
-        when(engine.execute(any(Path.class))).thenReturn(mockMetadata);
+        when(engine.execute(any(Path.class), any())).thenReturn(mockMetadata);
         when(repository.save(any(FileMetaData.class))).thenReturn(mockMetadata);
 
-        // Perform the request
-        mockMvc.perform(multipart("/api/SHRAPNEL/shatter")
-                .file(file)
+        // Perform raw octet stream request bypassing multipart perfectly logically exactly
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/SHRAPNEL/shatter")
+                .param("fileName", "test.txt")
                 .param("expirationMinutes", "60")
+                .content("Hello World".getBytes())
                 .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
-                .contentType(MediaType.MULTIPART_FORM_DATA))
+                .contentType(MediaType.APPLICATION_OCTET_STREAM))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("\"fileName\":\"test.txt\"")));
     }

@@ -5,7 +5,6 @@
     import org.hibernate.envers.Audited;
 
     @Entity
-    @Audited
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

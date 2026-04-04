@@ -32,6 +32,7 @@ public class FileMetaData {
     @Column(name = "tag")
     private List<String> tags;
 
+    @org.hibernate.envers.NotAudited
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @JoinColumn(name = "file_id")
     private List<FileShard> shards;
@@ -43,6 +44,13 @@ public class FileMetaData {
     // transaction hash returned by Polygon commit
     @Column(name = "blockchain_tx_hash")
     private String blockchainTxHash;
+
+    // Cryptographic variables for file-level password Envelope Encryption
+    @Column(name = "file_salt")
+    private String fileSalt;
+
+    @Column(name = "encrypted_fek", length = 1024)
+    private String encryptedFek;
 
     // Custom constructor for your ShatteringEngine
     public FileMetaData(String fileName, long totalSize) {
